@@ -12,6 +12,8 @@ const PODSVETKA = new THREE.Color(0xffb347);
 const VPERED = new THREE.Vector3(0, 0.25, 1);
 // Зубы мудрости и их десна достроены (у основы их нет): видны, только если зуб назвал случай.
 const MUDROST = /^(zub|desna)_(\d8)$/;
+// Глотка у основы свисает ниже подбородка: всё, что ниже этой высоты, не рисуем.
+const GLOTKA_NIZ = -0.042;
 
 const NAZVANIYA = {
   desna_verh: 'Десна верхняя', desna_niz: 'Десна нижняя', yazyk: 'Язык', nebo: 'Нёбо',
@@ -130,6 +132,9 @@ export class Prosmotr {
         m.userData.glubina = glubina;
       }
     }
+    this.renderer.localClippingEnabled = true;
+    const srez = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -GLOTKA_NIZ)];
+    for (const m of this.setki('glotka')) m.material.clippingPlanes = srez;
     for (const [imya, o] of this.chasti) if (imya.startsWith('porazh_') || MUDROST.test(imya)) o.visible = false;
     this.scena.add(this.model);
     const sfera = new THREE.Box3().setFromObject(this.model).getBoundingSphere(new THREE.Sphere());
@@ -166,6 +171,7 @@ export class Prosmotr {
       o.visible = !skryt.includes(imya) && (!m || obekty.includes('zub_' + m[2]) || obekty.includes(imya));
     }
     this.formy = formy;
+    this.nomer = -1;
     this.model.traverse((m) => {
       if (!m.morphTargetDictionary || m.userData.sluzhebnyy) return;
       m.morphTargetInfluences.fill(0);
@@ -236,9 +242,10 @@ export class Prosmotr {
     this.polet = { ot: this.kamera.position.clone(), do: kuda, cel0: this.upr.target.clone(), cel };
   }
 
-  /** Камера к поражению (или к подсвеченным частям; при отёке — всё лицо). */
-  kZone() {
-    const ob = this.porazheniya.length ? this.porazheniya : this.zona;
+  /** Камера к поражению (или к подсвеченным частям; при отёке — всё лицо). ob — только эти поражения. */
+  kZone(ob = null) {
+    const odno = ob?.length === 1;
+    ob ??= this.porazheniya.length ? this.porazheniya : this.zona;
     if (!ob.length) return this.obzor();
     const box = new THREE.Box3();
     ob.forEach((o) => box.expandByObject(o));
@@ -247,17 +254,37 @@ export class Prosmotr {
     if (this.formy.length) return this.obzor(true, -0.2 * Math.sign(s.center.x - this.centr.x));
     const nap = s.center.clone().sub(this.centr).normalize().add(VPERED);
     // поражение, обращённое к зрителю или вверх (жевательная поверхность, лунка), — смотреть ему «в лицо»
-    const n = sredNormal(this.porazheniya);
+    const n = sredNormal(this.porazheniya.includes(ob[0]) ? ob : this.porazheniya);
     if (n.dot(VPERED) > 0.2) nap.addScaledVector(n, 1.5);
     nap.normalize();
-    const d = THREE.MathUtils.clamp(this.dalnost(Math.max(s.radius, 0.012) * 2.3), 0.11, 0.3);
+    // одно мелкое поражение (афта) — крупным планом, иначе на телефоне это точка
+    const d = THREE.MathUtils.clamp(this.dalnost(Math.max(s.radius, 0.012) * 2.3), odno ? 0.07 : 0.11, 0.3);
     this.letet(s.center.clone().addScaledVector(nap, d), s.center.clone());
+  }
+
+  /** К следующему поражению по кругу, каждое крупным планом. Возвращает { nomer, vsego } или null. */
+  kSleduyushchemu() {
+    if (this.porazheniya.length < 2 || this.formy.length) {
+      this.kZone();
+      return null;
+    }
+    this.nomer = (this.nomer + 1) % this.porazheniya.length;
+    this.kZone([this.porazheniya[this.nomer]]);
+    return { nomer: this.nomer + 1, vsego: this.porazheniya.length };
   }
 
   /** Вся модель спереди; povorot — доворот вбок (x направления взгляда: + к левой стороне пациента). */
   obzor(plavno = true, povorot = 0) {
     // вписать по ширине и высоте рамки модели: сфера вокруг глубокой модели (от губ до глотки) даёт слишком мелкий вид
-    const box = new THREE.Box3().setFromObject(this.model);
+    // глотку — только до среза, иначе её невидимый хвост раздувает кадр вниз
+    const box = new THREE.Box3();
+    for (const [imya, o] of this.chasti) if (imya !== 'glotka') box.expandByObject(o);
+    const glotka = this.chasti.get('glotka');
+    if (glotka) {
+      const g = new THREE.Box3().setFromObject(glotka);
+      g.min.y = Math.max(g.min.y, GLOTKA_NIZ);
+      box.union(g);
+    }
     const raz = box.getSize(new THREE.Vector3());
     const v = THREE.MathUtils.degToRad(this.kamera.fov) / 2;
     const g = Math.atan(Math.tan(v) * this.kamera.aspect);

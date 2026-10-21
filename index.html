@@ -166,7 +166,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
         <button class="knopka" id="k-zone" disabled>К поражению</button>
         <button class="knopka" id="obzor" disabled>Весь рот</button>
       </div>
-      <p class="podpis" id="podpis">Кольцо — место поражения. Крути модель пальцем; нажми на часть рта — покажу, что это.</p>
+      <p class="podpis" id="podpis">Кольцо — место поражения. «К поражению» — каждое крупным планом. Крути модель пальцем; нажми на часть рта — покажу, что это.</p>
     </section>
 
     <section class="card zadanie" id="p-test" role="tabpanel" aria-labelledby="tab-test"></section>
@@ -350,10 +350,16 @@ try {
     b.addEventListener('click', () => {
       document.querySelectorAll('[data-rezhim]').forEach((x) => x.setAttribute('aria-pressed', x === b));
       p.rezhim(b.dataset.rezhim);
+      podpis.textContent = b.dataset.rezhim === 'obychno'
+        ? 'Снаружи видно только кольца: поражения во рту закрыты губой и щекой. Чтобы их разглядеть, включи «Прозрачно».'
+        : PODSKAZKA;
     });
   }
-  document.getElementById('k-zone').addEventListener('click', () => p.kZone());
-  document.getElementById('obzor').addEventListener('click', () => p.obzor());
+  document.getElementById('k-zone').addEventListener('click', () => {
+    const k = p.kSleduyushchemu();
+    if (k) podpis.textContent = `Поражение ${k.nomer} из ${k.vsego}. Нажми «К поражению» ещё раз — покажу следующее.`;
+  });
+  document.getElementById('obzor').addEventListener('click', () => { p.obzor(); podpis.textContent = PODSKAZKA; });
   document.querySelectorAll('.panel button').forEach((b) => { b.disabled = false; });
   window.prosmotr = p; // для проверки из консоли
 } catch (e) {
