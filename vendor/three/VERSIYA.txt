@@ -1,0 +1,1 @@
+three.js 0.186.1 (npm, sha512 сверен с registry.npmjs.org 19.10.2026). Лицензия MIT — LICENSE.

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3D: случай 2</title>
+<style>
+:root{
+  --bg:#f3f6f6; --card:#ffffff; --ink:#14232b; --muted:#5b6b72; --line:#d6e0e1;
+  --accent:#0b6e66; --accent-soft:#dff0ee; --stage:#e9eff0;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1719; --card:#162125; --ink:#e4eef0; --muted:#97a8ae; --line:#2a3a3f;
+  --accent:#4fc2b5; --accent-soft:#173a37; --stage:#1b2a2e; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1719; --card:#162125; --ink:#e4eef0; --muted:#97a8ae; --line:#2a3a3f;
+  --accent:#4fc2b5; --accent-soft:#173a37; --stage:#1b2a2e; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+main{max-width:760px;margin:0 auto;padding:20px 16px 40px;display:grid;gap:14px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(20px,4vw,26px);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-family:var(--f-body);font-weight:500;font-size:14px;color:var(--muted);letter-spacing:0;margin-top:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px}
+.model{position:relative;height:min(62vh,520px);border-radius:10px;overflow:hidden;
+  background:radial-gradient(120% 90% at 50% 35%,var(--card),var(--stage));touch-action:none}
+.model canvas{display:block;width:100%;height:100%}
+.model[data-tekst]::after{content:attr(data-tekst);position:absolute;inset:0;display:grid;place-items:center;
+  padding:16px;text-align:center;color:var(--muted)}
+.panel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+button{font:inherit;color:inherit;background:transparent;border:0;padding:8px 12px;min-height:40px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.knopka{border:1px solid var(--line);border-radius:10px}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.podpis{margin:10px 0 0;color:var(--muted);font-size:14px;min-height:1.5em}
+.podpis code{font-family:var(--f-mono);font-size:12px}
+dl{margin:0;display:grid;gap:8px}
+dt{font-size:13px;color:var(--muted)}
+dd{margin:0}
+.avtory{margin:4px 4px 0;color:var(--muted);font-size:12px;line-height:1.5}
+.avtory a{color:inherit}
+</style>
+</head>
+<body>
+<main>
+  <h1>Случай 2. Рецидивирующий афтозный стоматит<small>3D-пример: где искать поражение</small></h1>
+
+  <section class="card">
+    <div class="model" id="model" data-tekst="Загружаю модель…"></div>
+    <div class="panel">
+      <div class="seg" role="group" aria-label="Режим показа">
+        <button data-rezhim="prozrachno" aria-pressed="true">Прозрачно</button>
+        <button data-rezhim="obychno" aria-pressed="false">Обычно</button>
+      </div>
+      <button class="knopka" id="k-zone">К поражению</button>
+      <button class="knopka" id="obzor">Весь рот</button>
+    </div>
+    <p class="podpis" id="podpis">Нажми на любую часть — покажу, что это.</p>
+  </section>
+
+  <section class="card">
+    <dl>
+      <div><dt>Где</dt><dd>нижняя губа изнутри, щёки</dd></div>
+      <div><dt>Как выглядит</dt><dd>две круглые язвочки с бело-жёлтым дном и красным ободком</dd></div>
+    </dl>
+  </section>
+
+  <p class="avtory">3D-модель основана на «<a href="https://sketchfab.com/3d-models/human-mouth-detailed-522eda0ec0e3413a914b1b298a791320">Human mouth detailed</a>», автор Mince,
+    лицензия <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Изменено: модель разделена на части, перекрашены зубы, добавлены губы, щёки и поражения.</p>
+</main>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+<script type="module">
+import { Prosmotr, SLUCHAI, nazvanie } from './3d/prosmotr.js';
+
+const el = document.getElementById('model');
+const podpis = document.getElementById('podpis');
+
+try {
+  const p = await Prosmotr.sozdat(el, 'models/polost_rta.glb');
+  delete el.dataset.tekst;
+  p.rezhim('prozrachno');
+  p.pokazat(SLUCHAI[2]);
+
+  p.onVybor = (imya) => {
+    podpis.innerHTML = imya ? `${nazvanie(imya)} <code>${imya}</code>` : 'Нажми на любую часть — покажу, что это.';
+  };
+  for (const b of document.querySelectorAll('[data-rezhim]')) {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('[data-rezhim]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+      p.rezhim(b.dataset.rezhim);
+    });
+  }
+  document.getElementById('k-zone').addEventListener('click', () => p.kZone());
+  document.getElementById('obzor').addEventListener('click', () => p.obzor());
+  window.prosmotr = p; // для проверки из консоли
+} catch (e) {
+  console.error(e);
+  el.dataset.tekst = location.protocol === 'file:'
+    ? 'Модель не открывается с диска. Запусти в папке site: python -m http.server — и открой http://localhost:8000/3d.html'
+    : 'Не удалось загрузить модель.';
+}
+</script>
+</body>
+</html>
