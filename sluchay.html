@@ -1,0 +1,879 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ФармаДент</title>
+<meta name="description" content="Тренажёр для студентов-стоматологов: виртуальные пациенты стоматолога и терапевта, осмотр в 3D и выбор препарата с учётом сопутствующих болезней.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230b6e66'/%3E%3Cpath d='M9 9c2-2 5-1 7 0 2-1 5-2 7 0 2 3 0 7-1 10l-1 5c0 2-2 2-2 0l-1-4c0-1-2-1-2 0l-1 4c0 2-2 2-2 0l-1-5c-1-3-3-7-1-10z' fill='%23fff'/%3E%3C/svg%3E">
+<script src="tema.js"></script>
+<link rel="stylesheet" href="vendor/shrifty/shrifty.css">
+<style>
+/* Демо: один случай целиком. Карта пациента и 3D общие для обоих заданий.
+   На ПК 3D слева и не уезжает при прокрутке; на телефоне одна колонка: карта → 3D → задание. */
+:root{
+  --bg:#f3f6f6; --card:#ffffff; --ink:#14232b; --muted:#5b6b72; --line:#d6e0e1;
+  --accent:#0b6e66; --accent-soft:#dff0ee; --stage:#e9eff0;
+  --ok:#1f7a3f; --ok-soft:#e2f3e7; --warn:#a86500; --warn-soft:#fbefd9; --bad:#b3261e; --bad-soft:#fbe4e2;
+  --telo:#e6d6ce; --volosy:#a88676; --organ:#d9737c;
+  --f-display:"Unbounded","Golos Text",system-ui,sans-serif;
+  --f-body:"Golos Text",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:ui-monospace,"Cascadia Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0f1719; --card:#162125; --ink:#e4eef0; --muted:#97a8ae; --line:#2a3a3f;
+  --accent:#4fc2b5; --accent-soft:#173a37; --stage:#1b2a2e;
+  --ok:#6fd08f; --ok-soft:#173222; --warn:#f0b65a; --warn-soft:#3a2c14; --bad:#ff8a80; --bad-soft:#3d1c1a;
+  --telo:#2f4247; --volosy:#4d6770; --organ:#e3858d; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1719; --card:#162125; --ink:#e4eef0; --muted:#97a8ae; --line:#2a3a3f;
+  --accent:#4fc2b5; --accent-soft:#173a37; --stage:#1b2a2e;
+  --ok:#6fd08f; --ok-soft:#173222; --warn:#f0b65a; --warn-soft:#3a2c14; --bad:#ff8a80; --bad-soft:#3d1c1a;
+  --telo:#2f4247; --volosy:#4d6770; --organ:#e3858d; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1180px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:14px}
+h1{font-family:var(--f-display);font-weight:700;font-size:clamp(20px,4vw,28px);margin:0;letter-spacing:-.01em;text-wrap:balance}
+h1 small{display:block;font-family:var(--f-body);font-weight:500;font-size:14px;color:var(--muted);letter-spacing:0;margin-top:4px}
+.domoy{color:var(--accent);font-weight:600;text-decoration:none;padding:10px 0;min-height:44px}
+.domoy:hover{text-decoration:underline}
+.shapka-pravo{display:flex;align-items:center;gap:12px}
+.tema{display:grid;place-items:center;width:44px;height:44px;padding:0;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;cursor:pointer}
+.tema svg{width:20px;height:20px}
+.vybor{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.vybor select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;
+  padding:8px 10px;min-height:44px;flex:1 1 240px;min-width:0}
+.vybor button{font:inherit;font-size:18px;color:inherit;background:var(--card);border:1px solid var(--line);border-radius:10px;min-width:44px;min-height:44px;cursor:pointer}
+.vybor button:disabled{opacity:.4;cursor:default}
+.vybor span{font-size:13px;color:var(--muted)}
+nav{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px;border-bottom:1px solid var(--line)}
+nav button{font:inherit;font-weight:600;background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:10px 12px;cursor:pointer;min-height:44px}
+nav button[aria-selected="true"]{color:var(--accent);border-bottom-color:var(--accent)}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+.grid{display:grid;gap:14px;grid-template-columns:minmax(0,1fr);grid-template-areas:"karta" "model" "zadanie"}
+.karta{grid-area:karta} .model-card{grid-area:model} .zadanie{grid-area:zadanie}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cap::first-letter{text-transform:uppercase}
+
+/* карта пациента */
+.pname{font-family:var(--f-display);font-weight:500;font-size:18px;margin:2px 0 12px}
+.karta dl{display:grid;gap:10px;margin:0}
+.karta dt{color:var(--muted);font-size:13px}
+.karta dd{margin:0;hyphens:auto}
+
+/* 3D */
+.model{position:relative;height:min(56vh,440px);border-radius:10px;overflow:hidden;
+  background:radial-gradient(120% 90% at 50% 35%,var(--card),var(--stage));touch-action:none}
+.model canvas{display:block;width:100%;height:100%}
+.model[data-tekst]::after{content:attr(data-tekst);position:absolute;inset:0;display:grid;place-items:center;
+  padding:16px;text-align:center;color:var(--muted)}
+.panel{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.panel button{font:inherit;color:inherit;background:transparent;border:0;padding:8px 12px;min-height:44px;cursor:pointer}
+.panel button:disabled{opacity:.5;cursor:default}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.panel .knopka{border:1px solid var(--line);border-radius:10px}
+.panel .knopka[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+.panel [hidden]{display:none}
+.podpis{margin:10px 0 0;color:var(--muted);font-size:14px;min-height:1.5em}
+/* терапия: вместо 3D схема тела (telo.js) на том же месте; страницу можно листать пальцем поверх неё */
+.telo-scena{touch-action:auto;padding:12px}
+.telo-scena svg{display:block;width:100%;height:100%}
+
+@media (min-width:960px){
+  .grid{grid-template-columns:minmax(0,11fr) minmax(0,9fr);grid-template-rows:auto 1fr;
+    grid-template-areas:"model karta" "model zadanie";gap:18px;align-items:start}
+  .model-card{position:sticky;top:16px}
+  .model{height:min(72vh,640px)}
+}
+
+/* задание: вопрос и варианты */
+.zadanie{display:flex;flex-direction:column;gap:14px}
+.q{font-size:17px;font-weight:600;margin:4px 0 0;text-wrap:pretty}
+.opts{display:flex;flex-direction:column;gap:8px}
+.opt{font:inherit;text-align:left;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+  padding:11px 12px;min-height:44px;cursor:pointer;display:flex;gap:10px;align-items:flex-start}
+.opt .cap{display:block}
+.opt:hover:not(:disabled){border-color:var(--accent)}
+.opt .k{font-family:var(--f-mono);font-weight:600;color:var(--accent);flex:none}
+.opt:disabled{cursor:default;opacity:.55}
+.opt.good,.opt.badc{opacity:1;border-width:2px;padding:10px 11px}
+.opt.good{border-color:var(--ok);background:var(--ok-soft)}
+.opt.badc{border-color:var(--bad);background:var(--bad-soft)}
+#razbor{display:flex;flex-direction:column;gap:12px}
+#razbor:empty{display:none}
+.itog{border-radius:8px;padding:10px 12px;font-size:14px}
+.itog strong{display:block;font-size:16px}
+.itog.good{background:var(--ok-soft)} .itog.good strong{color:var(--ok)}
+.itog.badc{background:var(--bad-soft)} .itog.badc strong{color:var(--bad)}
+.h{font-family:var(--f-display);font-weight:500;font-size:16px;margin:6px 0 0}
+.fb{border-left:3px solid var(--line);padding:2px 0 2px 12px;font-size:14px}
+.fb.good{border-color:var(--ok)} .fb.badc{border-color:var(--bad)}
+.fb strong{display:block;margin-bottom:2px}
+.fb.good strong{color:var(--ok)} .fb.badc strong{color:var(--bad)}
+.fb p,.podhod p{margin:0;hyphens:auto}
+.fb p+p,.podhod p+p{margin-top:8px}
+.podhod{background:var(--accent-soft);border-radius:10px;padding:12px 14px;font-size:14px}
+.podhod .h{margin:0 0 6px;color:var(--accent)}
+.schet{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.schet b{font-family:var(--f-display);font-size:22px;font-variant-numeric:tabular-nums}
+.schet span{font-size:13px;color:var(--muted)}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{font:inherit;font-weight:600;border-radius:8px;padding:10px 14px;min-height:44px;cursor:pointer;border:1px solid var(--accent);background:var(--accent);color:var(--card)}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:default}
+.src{font-size:13px;color:var(--muted);margin:0}
+
+/* светофор: метки у вариантов после ответа; цвет дублирует слово и форма точки */
+.svet{font:inherit;font-size:13px;font-weight:600;display:flex;flex-wrap:wrap;gap:6px;align-items:center;background:none;border:0;
+  padding:4px 0;margin:2px 0 4px;min-height:44px;color:var(--ink);cursor:pointer;text-align:left}
+.sv{display:inline-flex;align-items:center;gap:6px;border:1px solid;border-radius:999px;padding:3px 10px 3px 8px;line-height:1.3}
+.sv::before{content:"";width:10px;height:10px;border-radius:50%;flex:none;background:currentColor}
+.sv.sv-konflikt{color:var(--bad);background:var(--bad-soft)}
+.sv.sv-ostorozhno{color:var(--warn);background:var(--warn-soft)}
+.sv.sv-ostorozhno::before{border-radius:0;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.sv.sv-ne_po_pokaz{color:var(--muted);background:var(--card)}
+.sv.sv-ne_po_pokaz::before{background:none;box-shadow:inset 0 0 0 2px currentColor}
+.sv.sv-podhodit{color:var(--ok);background:var(--ok-soft)}
+.sv.sv-net{color:var(--muted);border-style:dashed}
+.sv.sv-net::before{display:none}
+.sv-str{color:var(--accent);font-weight:500;text-decoration:underline dotted;text-underline-offset:3px}
+.sv-str::after{content:" ▾"}
+.svet[aria-expanded="true"] .sv-str::after{content:" ▴"}
+.sv-pr{font-size:14px;margin:0 0 8px;padding:10px 12px;border-radius:8px;background:var(--bg);border:1px solid var(--line)}
+.sv-pr ul{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:10px}
+.sv-pr li{border-left:3px solid var(--muted);padding-left:10px}
+.sv-pr li.sv-konflikt{border-color:var(--bad)} .sv-pr li.sv-konflikt b{color:var(--bad)}
+.sv-pr li.sv-ostorozhno{border-color:var(--warn)} .sv-pr li.sv-ostorozhno b{color:var(--warn)}
+.sv-pr li.sv-podhodit{border-color:var(--ok)} .sv-pr li.sv-podhodit b{color:var(--ok)}
+.sv-gde,.sv-ist{display:block;color:var(--muted);font-size:13px}
+.sv-ist{font-size:12px}
+.sv-pr a{color:inherit}
+.karta mark{color:inherit;border-radius:4px;padding:0 2px;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+.karta mark.sv-konflikt{background:var(--bad-soft);box-shadow:0 0 0 1px var(--bad)}
+.karta mark.sv-ostorozhno{background:var(--warn-soft);box-shadow:0 0 0 1px var(--warn)}
+.karta mark.sv-ne_po_pokaz{background:var(--stage);box-shadow:0 0 0 1px var(--muted)}
+.karta mark.sv-podhodit{background:var(--ok-soft);box-shadow:0 0 0 1px var(--ok)}
+
+/* найди ошибку ИИ */
+.ai{border:1px dashed var(--accent);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px}
+.ai-head{display:flex;justify-content:space-between;gap:4px 8px;flex-wrap:wrap;font-size:12px;color:var(--muted)}
+#ii-stroki{display:flex;flex-direction:column;gap:4px}
+.line{font:inherit;font-size:14px;text-align:left;background:transparent;color:var(--ink);border:1px solid transparent;border-radius:6px;
+  padding:8px 10px;min-height:44px;cursor:pointer;display:flex;gap:10px}
+.line:hover:not(:disabled){background:var(--accent-soft)}
+.line .n{font-family:var(--f-mono);color:var(--muted);flex:none}
+.line.marked{border-color:var(--warn);background:var(--warn-soft)}
+.line.hit{border-color:var(--ok);background:var(--ok-soft)}
+.line.miss{border-color:var(--bad);background:var(--bad-soft)}
+.line.false{border-color:var(--bad);border-style:dashed}
+.line:disabled{cursor:default}
+.zamok p{margin:0 0 12px}
+#ii-itog{display:flex;flex-direction:column;gap:12px}
+#ii-itog:empty{display:none}
+
+.avtory{margin:18px 4px 0;color:var(--muted);font-size:11px;line-height:1.5;text-align:right;opacity:.6}
+.avtory p{margin:0 0 4px}
+.avtory a{color:inherit;text-decoration:none}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>ФармаДент<small>Виртуальный пациент: изучи карту и подбери препарат с учётом его болезней</small></h1>
+    <div class="shapka-pravo">
+      <a class="domoy" href="index.html">← Все случаи</a>
+      <button class="tema" id="tema" aria-label="Тема"></button>
+    </div>
+  </header>
+
+  <div class="vybor" role="group" aria-label="Случай">
+    <button id="pred" aria-label="Предыдущий случай">←</button>
+    <select id="sluchay" aria-label="Случай"></select>
+    <button id="sled" aria-label="Следующий случай">→</button>
+    <span id="schet-mini" aria-live="polite"></span>
+  </div>
+
+  <nav role="tablist" aria-label="Задание">
+    <button role="tab" id="tab-test" aria-selected="true" aria-controls="p-test" data-tab="test">Выбор препарата</button>
+    <button role="tab" id="tab-ii" aria-selected="false" aria-controls="p-ii" data-tab="ii" tabindex="-1">Найди ошибку ИИ</button>
+  </nav>
+
+  <div class="grid">
+    <section class="card karta" aria-labelledby="k-pacient">
+      <div class="eyebrow">Амбулаторная карта</div>
+      <p class="pname cap" id="k-pacient"></p>
+      <dl>
+        <div><dt>Хронические заболевания</dt><dd class="cap" data-pole="hronicheskie"></dd></div>
+        <div><dt>Постоянно принимает</dt><dd class="cap" data-pole="preparaty"></dd></div>
+        <div><dt>Жалобы</dt><dd class="cap" data-pole="zhaloby"></dd></div>
+        <div><dt>Данные осмотра</dt><dd class="cap" data-pole="osmotr"></dd></div>
+        <div><dt>Предполагаемый диагноз</dt><dd class="cap" data-pole="diagnoz"></dd></div>
+      </dl>
+    </section>
+
+    <section class="card model-card" aria-label="3D-модель полости рта">
+      <div class="model" id="model" data-tekst="Загружаю 3D-модель…"></div>
+      <div class="panel">
+        <div class="seg" role="group" aria-label="Режим показа">
+          <button data-rezhim="prozrachno" aria-pressed="true" disabled>Прозрачно</button>
+          <button data-rezhim="obychno" aria-pressed="false" disabled>Обычно</button>
+        </div>
+        <button class="knopka" id="k-zone" disabled>К поражению</button>
+        <button class="knopka" id="obzor" disabled>Весь рот</button>
+        <button class="knopka" id="podsvetka" aria-pressed="true" title="Жёлтое свечение поражённой части" disabled>Подсветка</button>
+      </div>
+      <p class="podpis" id="podpis">Кольцо — место поражения. «К поражению» — каждое крупным планом. Крути модель пальцем; нажми на часть рта — покажу, что это.</p>
+    </section>
+
+    <section class="card model-card" id="telo-card" aria-label="Схема тела" hidden>
+      <div class="model telo-scena" id="telo"></div>
+      <p class="podpis" id="telo-podpis"></p>
+    </section>
+
+    <section class="card zadanie" id="p-test" role="tabpanel" aria-labelledby="tab-test"></section>
+
+    <section class="card zadanie" id="p-ii" role="tabpanel" aria-labelledby="tab-ii" hidden>
+      <div id="ii-zamok" class="zamok">
+        <p>Сначала ответь на вопрос во вкладке «Выбор препарата»: разбор ошибок ИИ подсказал бы ответ.</p>
+        <div class="actions"><button class="btn" id="k-testu">К выбору препарата</button></div>
+      </div>
+      <div id="ii-telo" class="zadanie">
+      <p class="src">Задание: ИИ-ассистент предложил план лечения. Нажми на строки, в которых, по-твоему, есть ошибка, затем «Проверить».</p>
+      <div class="ai">
+        <div class="ai-head"><span>Ответ ИИ-ассистента</span><span>учебный пример, составлен по тексту случая</span></div>
+        <div id="ii-stroki"></div>
+      </div>
+      <div class="actions">
+        <button class="btn" id="ii-proverit">Проверить</button>
+        <button class="btn ghost" id="ii-zanovo">Начать заново</button>
+      </div>
+      <div id="ii-itog" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="avtory">
+    <p><a href="istochniki.html">Источники</a></p>
+  </footer>
+</div>
+
+<script src="data/sluchai.js"></script>
+<script src="data/svetofor.js"></script>
+<script src="telo.js"></script>
+<script>
+// Тест и «Найди ошибку ИИ» — обычный скрипт: работают и с диска, где 3D не грузится.
+// Два раздела: стоматология (3D) и терапия (схема тела). Номера у разделов совпадают (11–17 есть в обоих),
+// поэтому случай везде берётся по ключу kl: «1»…«17» и «t1»…«t11» (tools/sobrat_sluchai.py).
+// Счёт, «случай N из M», стрелки и «следующий случай» — внутри раздела открытого случая.
+const $ = (s) => document.querySelector(s);
+const BUKVY = 'АБВГ';
+const VSE = window.SLUCHAI_DANNYE.sluchai;
+const RAZDELY = { stomat: 'Стоматология', terapiya: 'Терапия' };
+let SL = VSE[0];
+const razdel = () => VSE.filter((s) => s.razdel === SL.razdel);
+const otvety = {}; // ключ случая → { poryadok, i, verno }: к отвеченному случаю можно вернуться
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const abzacy = (s) => s.split(/\n\s*\n/).map((p) => `<p class="cap">${esc(p.trim())}</p>`).join('');
+const plavno = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
+// ---------- Выбор препарата: варианты в случайном порядке, буквы — по месту на экране ----------
+let poryadok = [];
+function peremeshat(a) {
+  a = a.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function nachatTest() {
+  const o = otvety[SL.kl];
+  poryadok = o ? o.poryadok : peremeshat(SL.varianty);
+  $('#p-test').innerHTML = `
+    <div class="eyebrow">${RAZDELY[SL.razdel]} · ${razdel().indexOf(SL) + 1} из ${razdel().length}</div>
+    <p class="q cap">${esc(SL.vopros)}</p>
+    <div class="opts">${poryadok.map((v, i) => `<button class="opt" data-i="${i}"><span class="k">${BUKVY[i]}</span><span class="cap">${esc(v.tekst)}</span></button>`).join('')}</div>
+    <div id="razbor" aria-live="polite"></div>`;
+  $('#p-test').querySelectorAll('.opt').forEach((b) => b.addEventListener('click', () => vybrat(+b.dataset.i)));
+  podsvetitKartu([]);
+  if (o) vybrat(o.i);
+}
+function schet() {
+  const vse = razdel().map((s) => otvety[s.kl]).filter(Boolean);
+  return { verno: vse.filter((o) => o.verno).length, vsego: vse.length };
+}
+function vybrat(i) {
+  const iV = poryadok.findIndex((v) => v.bukva === SL.pravilnyy);
+  const verno = i === iV;
+  otvety[SL.kl] = { poryadok, i, verno };
+  obnovitVybor();
+  zamokII();
+  const { verno: v, vsego } = schet();
+  const R = razdel();
+  const konec = vsego === R.length;
+  const sled = R[R.indexOf(SL) + 1];
+  document.querySelectorAll('#p-test .opt').forEach((b, j) => {
+    b.disabled = true;
+    if (j === iV) b.classList.add('good');
+    else if (j === i) b.classList.add('badc');
+  });
+  const metka = (j) => (j === iV && j === i ? ' — ваш ответ, верный' : j === iV ? ' — верный ответ' : j === i ? ' — ваш ответ' : '');
+  const svet = SV ? poryadok.map(svetofor) : [];
+  $('#razbor').innerHTML = `
+    <div class="itog ${verno ? 'good' : 'badc'}"><strong>${verno ? 'Верно' : 'Неверно'}</strong>${verno ? '' : `Верный ответ — ${BUKVY[iV]}. ${esc(poryadok[iV].tekst)}.`}</div>
+    <h2 class="h">Разбор вариантов</h2>
+    ${SV ? '<p class="src">Метка у варианта — светофор: сверка с болезнями и лекарствами пациента. Нажми на метку — покажу причину и строку карты.</p>' : ''}
+    ${poryadok.map((v, j) => `<div class="fb ${j === iV ? 'good' : j === i ? 'badc' : ''}"><strong>${BUKVY[j]}. ${esc(v.tekst)}${metka(j)}</strong>${SV ? svetHtml(svet[j], j) : ''}<p class="cap">${esc(v.obyasnenie)}</p></div>`).join('')}
+    ${SV ? `<p class="src">${esc(SV.status)}</p>` : ''}
+    <section class="podhod"><h2 class="h">Индивидуальный подход</h2>${abzacy(SL.podhod)}</section>
+    <div class="schet"><b>${v} из ${vsego}</b><span>${konec ? `верных ответов — пройдены все ${R.length} случаев раздела «${RAZDELY[SL.razdel]}».`
+      : `верных ответов; отвечено ${vsego} из ${R.length} случаев раздела «${RAZDELY[SL.razdel]}».`}</span></div>
+    <div class="actions">
+      ${sled ? '<button class="btn" id="dalshe">Следующий случай</button>' : ''}
+      <button class="btn ghost" id="zanovo">Ответить заново</button>
+      ${II.length ? '<button class="btn ghost" id="k-ii">Найди ошибку ИИ</button>' : ''}
+      ${konec ? '<button class="btn ghost" id="vse-zanovo">Пройти все заново</button>' : ''}
+    </div>`;
+  $('#razbor').querySelectorAll('.svet').forEach((b) => b.addEventListener('click', () => {
+    const vkl = b.getAttribute('aria-expanded') !== 'true';
+    $('#razbor').querySelectorAll('.svet').forEach((x) => { // открыта одна причина: подсветка карты — её
+      x.setAttribute('aria-expanded', vkl && x === b);
+      $('#sv-' + x.dataset.j).hidden = !(vkl && x === b);
+    });
+    podsvetitKartu(vkl ? svet[+b.dataset.j].hity : []);
+  }));
+  const knopka = (id, f) => { const b = $(id); if (b) b.onclick = f; };
+  knopka('#dalshe', () => { otkryt(sled.kl); pokazatNachalo($('.karta')); });
+  knopka('#zanovo', () => { delete otvety[SL.kl]; obnovitVybor(); nachatTest(); nachatII(); zamokII(); pokazatNachalo($('#p-test')); });
+  knopka('#k-ii', () => vkladka('ii'));
+  knopka('#vse-zanovo', () => {
+    for (const s of R) delete otvety[s.kl];
+    otkryt(R[0].kl);
+    pokazatNachalo($('.karta'));
+  });
+}
+
+// ---------- Светофор: сверка варианта с картой пациента, видна после ответа ----------
+// Правила общие — «группа препарата × состояние пациента» (data/svetofor.json → data/svetofor.js),
+// поэтому новый случай проверяется сам, если его препараты и болезни есть в словарях.
+// Сопоставление то же, что в tools/sobrat_svetofor.py: меняешь одно — меняй и другое.
+const SV = window.SVETOFOR;
+const UROVNI = { konflikt: 'Конфликт', ostorozhno: 'Осторожно', ne_po_pokaz: 'Не по показаниям', podhodit: 'Подходит', net: 'Правил нет' };
+const PORYADOK = Object.keys(UROVNI);
+const norm = (s) => s.toLowerCase().replace(/ё/g, 'е'); // длину строки не меняет: позиции годятся для исходного текста
+function svetofor(v) {
+  const t = norm(v.tekst);
+  const gruppy = SV.gruppy.filter((g) => g.est.some((a) => [].concat(a).every((k) => t.includes(norm(k))))).map((g) => g.id);
+  const sost = {}; // состояние → где оно в карте
+  for (const s of SV.sostoyaniya) {
+    const pole = norm(SL[s.pole] || '');
+    for (const k of s.est) {
+      const i = pole.indexOf(norm(k));
+      if (i >= 0) { sost[s.id] = { pole: s.pole, i }; break; }
+    }
+  }
+  const hity = SV.pravila.filter((p) => gruppy.includes(p.gruppa) && (p.sostoyanie === '*' || sost[p.sostoyanie]))
+    .map((p) => ({ ...p, gde: sost[p.sostoyanie] }))
+    .sort((a, b) => PORYADOK.indexOf(a.uroven) - PORYADOK.indexOf(b.uroven));
+  const est = new Set(hity.map((h) => h.uroven));
+  const metki = PORYADOK.slice(0, 3).filter((u) => est.has(u)); // «подходит» — только если замечаний нет
+  return { hity, metki: metki.length ? metki : [est.has('podhodit') ? 'podhodit' : 'net'] };
+}
+// Строка карты вокруг найденного слова — до запятой или точки с запятой
+function kusok(tekst, i) {
+  let a = i, b = i;
+  while (a > 0 && !',;'.includes(tekst[a - 1])) a--;
+  while (b < tekst.length && !',;.'.includes(tekst[b])) b++;
+  while (tekst[a] === ' ') a++;
+  return [a, b];
+}
+function podsvetitKartu(hity) {
+  document.querySelectorAll('.karta [data-pole]').forEach((dd) => {
+    const tekst = SL[dd.dataset.pole] || '';
+    const kuski = hity.filter((h) => h.gde && h.gde.pole === dd.dataset.pole)
+      .map((h) => [...kusok(tekst, h.gde.i), h.uroven]).sort((x, y) => x[0] - y[0]);
+    let html = '', poz = 0;
+    for (const [a, b, u] of kuski) {
+      if (a < poz) continue; // два правила на одну строку — метка первого, более строгого
+      html += `${esc(tekst.slice(poz, a))}<mark class="sv-${u}">${esc(tekst.slice(a, b))}</mark>`;
+      poz = b;
+    }
+    dd.innerHTML = html + esc(tekst.slice(poz));
+  });
+}
+function prichina(h) {
+  let gde = '';
+  if (h.gde) {
+    const [a, b] = kusok(SL[h.gde.pole], h.gde.i);
+    const dt = document.querySelector(`.karta [data-pole="${h.gde.pole}"]`).previousElementSibling.textContent;
+    gde = `<span class="sv-gde">${esc(dt)}: «${esc(SL[h.gde.pole].slice(a, b))}»</span>`;
+  }
+  const ssylki = (h.ssylki || []).map((s) => ` <a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.nazvanie)}</a>`).join('');
+  return `<li class="sv-${h.uroven}"><b>${h.uroven === 'podhodit' ? 'По показаниям' : UROVNI[h.uroven]}.</b> ${esc(h.pochemu)}${gde}<span class="sv-ist">Источник: ${esc(h.istochnik)}${ssylki}</span></li>`;
+}
+const svetHtml = (s, j) => `<button class="svet" data-j="${j}" aria-expanded="false" aria-controls="sv-${j}">${s.metki.map((u) => `<span class="sv sv-${u}">${UROVNI[u]}</span>`).join('')}<span class="sv-str">почему</span></button>
+  <div class="sv-pr" id="sv-${j}" hidden>${s.hity.length ? `<ul>${s.hity.map(prichina).join('')}</ul>`
+    : '<p>Для этого варианта и болезней пациента правил в светофоре нет — проверь сам по инструкции.</p>'}</div>`;
+
+// ---------- Выбор случая ----------
+function obnovitVybor() {
+  $('#sluchay').innerHTML = Object.entries(RAZDELY).map(([r, imya]) => `<optgroup label="${imya}">${VSE.filter((s) => s.razdel === r).map((s) => {
+    const o = otvety[s.kl];
+    return `<option value="${s.kl}">Случай ${s.nomer}. ${esc(s.nazvanie)}${o ? (o.verno ? ' — верно' : ' — неверно') : ''}</option>`;
+  }).join('')}</optgroup>`).join('');
+  $('#sluchay').value = SL.kl;
+  const R = razdel();
+  const k = R.indexOf(SL);
+  $('#pred').disabled = k === 0;
+  $('#sled').disabled = k === R.length - 1;
+  const { verno, vsego } = schet();
+  $('#schet-mini').textContent = vsego ? `Верно ${verno} из ${vsego}` : `${RAZDELY[SL.razdel]}: ${R.length} случаев`;
+}
+// Подпись под схемой тела: у крови кольца нет — цветом показано, что затронуто
+const TELO_PODPIS = {
+  krov: 'Схема тела: болезнь крови — затронуты сосуды по всему телу.',
+  b12: 'Схема тела: дефицит B12 затрагивает кровь (бледные сосуды) и нервную систему — головной и спинной мозг.',
+};
+function pokazatSchemu() {
+  const terapiya = SL.razdel === 'terapiya';
+  $('.model-card').hidden = terapiya;
+  $('#telo-card').hidden = !terapiya;
+  $('.domoy').href = terapiya ? 'index.html#terapiya' : 'index.html';
+  if (!terapiya) return;
+  $('#telo').innerHTML = telo(SL.organ, { pol: SL.pol, podpis: `Схема тела: ${SL.nazvanie}` });
+  $('#telo-podpis').textContent = TELO_PODPIS[SL.organ] || 'Схема тела: кольцо — где болезнь.';
+}
+function otkryt(kl) {
+  SL = VSE.find((s) => s.kl === kl) || VSE[0];
+  $('#k-pacient').textContent = SL.pacient;
+  document.querySelectorAll('[data-pole]').forEach((dd) => {
+    dd.textContent = SL[dd.dataset.pole] || '';
+    dd.parentElement.hidden = !SL[dd.dataset.pole]; // у терапии нет лекарств и данных осмотра — строки скрыты
+  });
+  pokazatSchemu();
+  II = OSHIBKI_II[SL.kl] || [];
+  $('#tab-ii').hidden = !II.length;
+  if (!II.length && $('#p-test').hidden) vkladka('test');
+  obnovitVybor();
+  nachatTest();
+  nachatII();
+  zamokII();
+  history.replaceState(null, '', '#' + SL.kl);
+  window.tekNomer = SL.kl; // 3D подхватит при загрузке
+  document.dispatchEvent(new CustomEvent('sluchay', { detail: SL.kl }));
+}
+$('#sluchay').onchange = (e) => otkryt(e.target.value);
+$('#pred').onclick = () => otkryt(razdel()[razdel().indexOf(SL) - 1].kl);
+$('#sled').onclick = () => otkryt(razdel()[razdel().indexOf(SL) + 1].kl);
+
+// ---------- Найди ошибку ИИ ----------
+// В демо ответ «ИИ» составлен по тексту случая: ошибки — неверные варианты из data/*.json (err — буква варианта),
+// разбор каждой ошибки — дословно объяснение этого варианта.
+const OSHIBKI_II = {
+  1: [
+    { t: 'Белый творожистый налёт на щеках, спинке языка и нёбе, под снятым налётом — покрасневшая кровоточащая поверхность: псевдомембранозный кандидозный стоматит.' },
+    { t: 'Надёжнее всего миконазол в форме геля для полости рта: при местном применении с варфарином он не взаимодействует.', err: 'А' },
+    { t: 'Для местного лечения — клотримазол («Кандид») в форме раствора 1 %: его наносят на поражённые участки, всасывание со слизистой незначительно.' },
+    { t: 'Чтобы быстрее снять жжение и воспаление, наносить триамцинолон в адгезивной форме.', err: 'Г' },
+    { t: 'Будесонид не отменять: проверить технику ингаляции и полоскать рот водой после каждой ингаляции. МНО на варфарине контролирует врач.' },
+    { t: 'Жжение и изменение вкуса похожи на герпес — добавить ацикловир в форме мази.', err: 'В' },
+  ],
+  2: [
+    { t: 'Картина соответствует рецидивирующему афтозному стоматиту: округлые язвы с беловато-жёлтым дном и красным ободком, пузырьков перед ними не было.' },
+    { t: 'Для уменьшения боли — бензидамин в форме раствора для местного применения.' },
+    { t: 'При сильной боли добавить кетопрофен в таблетках — он надёжнее снимет воспаление.', err: 'Б' },
+    { t: 'Бензокаин-гель можно наносить на язвы без ограничений: средство местное, системных рисков нет.', err: 'В' },
+    { t: 'Чтобы афты не возвращались, назначить курс флуконазола в капсулах.', err: 'Г' },
+    { t: 'Если язвы часто повторяются, долго не заживают или становятся многочисленными, — обследовать: дефицит железа, витамина B12, фолиевой кислоты, системные заболевания.' },
+  ],
+  3: [
+    { t: 'Картина типична для рецидивирующего герпеса губ: сначала жжение и покалывание, затем сгруппированные пузырьки на красной кайме, часть вскрылась с эрозиями и корочками.' },
+    { t: 'Корочки и эрозии говорят о бактериальной инфекции, поэтому сразу нанести мупироцин в форме мази.', err: 'Б' },
+    { t: 'Местно — ацикловир в форме крема для наружного применения: начинать как можно раньше, наружная форма почти не всасывается.' },
+    { t: 'Надёжнее сразу перейти на валацикловир в таблетках в обычной дозе — функция почек тут значения не имеет.', err: 'В' },
+    { t: 'При хронической болезни почек наружная форма позволяет свести системное воздействие к минимуму.' },
+    { t: 'Отёк и покраснение губы быстро снимет гидрокортизоновая мазь — её можно наносить вместо противовирусного средства.', err: 'Г' },
+  ],
+  4: [
+    { t: 'Белесоватые сетчатые линии на обеих щеках, местами с покраснением и эрозиями, — эрозивная форма красного плоского лишая.' },
+    { t: 'Начать лучше с такролимуса в мази: это препарат первой линии при красном плоском лишае во рту.', err: 'А' },
+    { t: 'Белые линии — это грибок, поэтому основное лечение — клотримазол («Кандид»).', err: 'Г' },
+    { t: 'Препарат первой линии — местный глюкокортикостероид: клобетазола пропионат («Дермовейт») в креме или мази аппликациями на очаги, под контролем врача.' },
+    { t: 'Бензидамин в растворе для полоскания вылечит лишай: он подавляет воспаление.', err: 'В' },
+    { t: 'Глаукома требует осторожности с глюкокортикостероидами. Алендронат самостоятельно не отменять: он связан с редким риском остеонекроза челюсти.' },
+  ],
+  5: [
+    { t: 'Язва напротив выступающего края нового протеза — травматическая. Главное — скорректировать протез, чтобы его край не травмировал щёку.' },
+    { t: 'Лидокаин-гель ускорит заживление язвы, если наносить его почаще.', err: 'А' },
+    { t: 'Для антисептической обработки как вспомогательная мера — хлоргексидин в форме раствора для полоскания; коррекцию протеза он не заменяет.' },
+    { t: 'Если полоскать рот бензидамином, протез можно не корректировать: воспаление пройдёт само.', err: 'Б' },
+    { t: 'При сахарном диабете заживление может замедляться. Если язва не заживёт примерно за две недели после устранения травмы, — повторный осмотр и решение вопроса о биопсии.' },
+    { t: 'Боль снимет гель с холина салицилатом — с аспирином, который принимает пациент, он никак не связан.', err: 'В' },
+  ],
+  6: [
+    { t: 'Сухая слизистая, вязкая слюна и прилипающее к слизистой зеркальце при синдроме Шегрена — ксеростомия.' },
+    { t: 'Можно полоскать рот раствором атропина: он смягчит пересохшую слизистую.', err: 'Г' },
+    { t: 'Для облегчения сухости — заменитель слюны в форме спрея или геля: он увлажняет, не стимулируя слюнные железы.' },
+    { t: 'Надёжнее назначить пилокарпин в таблетках: стимуляция слюноотделения безопасна и при бронхиальной астме.', err: 'Б' },
+    { t: 'Пить воду небольшими порциями, пользоваться средствами гигиены с фторидами и реже есть сладкое: начальный кариес уже множественный.' },
+    { t: 'Жжение языка уменьшит оксибутинин в таблетках.', err: 'В' },
+  ],
+  7: [
+    { t: 'Стойкая белая бляшка на боковой поверхности языка, которая не снимается, — подозрение на лейкоплакию; диагноз нужно подтвердить.' },
+    { t: 'У пациента с ХОБЛ на ингаляторе белое пятно — скорее всего кандидоз: начать с флуконазола в капсулах, а обследовать — если не поможет.', err: 'Б' },
+    { t: 'Чтобы уменьшить воспаление вокруг бляшки, назначить преднизолон в таблетках.', err: 'В' },
+    { t: 'Первый шаг — направить на специализированное обследование и решить вопрос о биопсии; стойкое поражение боковой поверхности языка не откладывать.' },
+    { t: 'Белый участок быстро уменьшит системный ретиноид — тогда и биопсия не понадобится.', err: 'Г' },
+    { t: 'Тиотропий может усиливать сухость во рту: нужна профилактика кариеса, но это не повод отказываться от обследования.' },
+  ],
+  8: [
+    { t: 'Резко болезненные отёчные межзубные сосочки с сероватым некротическим налётом, кровоточивость и температура 38 °C — острый некротический язвенный гингивит.' },
+    { t: 'Раз нужен антибиотик, лучше всего амоксициллин: он подходит при любом некротическом поражении дёсен.', err: 'Б' },
+    { t: 'Основа лечения — осторожное удаление некротических тканей и отложений, местная обработка, обезболивание и восстановление гигиены.' },
+    { t: 'Доксициклин в таблетках — универсальное средство, его можно принимать и без врача.', err: 'В' },
+    { t: 'Если врач признал системный антибиотик необходимым, — метронидазол в таблетках: он активен против анаэробов. Вместе с местной обработкой и гигиеной.' },
+    { t: 'Первым выбором сделать клиндамицин: побочных эффектов со стороны кишечника у него нет.', err: 'Г' },
+  ],
+  9: [
+    { t: 'Частично прорезавшийся 38 с воспалённым капюшоном, под которым задерживается пища, — перикоронит; лихорадки и отёка лица нет.' },
+    { t: 'При сильной боли лучше ибупрофен: короткий курс почкам и желудку не повредит.', err: 'Б' },
+    { t: 'Для кратковременного обезболивания — парацетамол в таблетках: на почки и желудок он влияет меньше, чем НПВП. Дозу — по инструкции.' },
+    { t: 'Боль снимет «Метрогил Дента»: гель наносят на десну, он и обезболивает, и лечит воспаление.', err: 'Г' },
+    { t: 'Самое сильное обезболивание — кеторолак в таблетках, его можно взять с самого начала.', err: 'В' },
+    { t: 'Обезболивание причину не устраняет: стоматолог осмотрит, промоет область под капюшоном и решит, нужно ли хирургическое лечение.' },
+  ],
+  10: [
+    { t: 'Гладкий блестящий язык с участками покраснения, трещины в углах рта и сниженный витамин B12 — атрофический глоссит при дефиците B12.' },
+    { t: 'Для восстановления сосочков языка назначить цинка сульфат в таблетках.', err: 'Г' },
+    { t: 'При аутоиммунном гастрите B12 плохо всасывается, поэтому цианокобаламин — в форме инъекционного раствора; схему определяет врач.' },
+    { t: 'Можно обойтись без уколов: фолиевая кислота в таблетках тоже восполнит нехватку витамина B12.', err: 'В' },
+    { t: 'Левотироксин продолжать по прежней схеме. Если врач добавит новые препараты, время их приёма согласовать с ним: некоторые уменьшают всасывание левотироксина.' },
+    { t: 'Обязательно добавить ферросульфат в таблетках: при глоссите всегда не хватает железа.', err: 'Б' },
+  ],
+  11: [
+    { t: 'Разрастание дёсен в межзубных промежутках на фоне приёма нифедипина, налёт и камень — лекарственно-индуцированное увеличение дёсен с местным воспалением.' },
+    { t: 'Раз причина в нифедипине, пациенту нужно сразу прекратить его приём.', err: 'А' },
+    { t: 'Стоматолог проводит профессиональную гигиену и учит бережной чистке зубов.' },
+    { t: 'Кровоточивость дёсен — признак инфекции: нужен длительный курс системного антибиотика.', err: 'В' },
+    { t: 'Возможность изменить антигипертензивную терапию обсудить с лечащим врачом: при хронической сердечной недостаточности менять её можно только после его оценки.' },
+    { t: 'Чтобы десна уменьшилась быстрее, назначить системный глюкокортикостероид.', err: 'Г' },
+  ],
+  12: [
+    { t: 'Лунка 47 под кровяным сгустком, края спокойные, отёка и температуры нет — обычная боль после удаления зуба.' },
+    { t: 'Удобнее всего аспирин: он снимет боль и заодно предупредит воспаление лунки.', err: 'Б' },
+    { t: 'Перед выбором обезболивающего уточнить язвенную болезнь и кровотечения, болезни почек и сердца, аллергию на НПВП, беременность и приём антикоагулянтов.' },
+    { t: 'Чтобы боль точно не вернулась, сразу назначить трамадол.', err: 'В' },
+    { t: 'При отсутствии противопоказаний — напроксен коротким курсом в минимальной эффективной дозе; с другими НПВП не сочетать.' },
+    { t: 'После любого удаления зуба стандартно назначают преднизолон: он снимет боль и не даст развиться отёку.', err: 'Г' },
+  ],
+  13: [
+    { t: 'Разрушенный кариесом 36 и болезненная припухлость с флюктуацией у его корней, из которой выделяется гной, — локальный зубной абсцесс; отёка лица нет.' },
+    { t: 'Хватит одного метронидазола: он перекрывает всех возбудителей одонтогенной инфекции.', err: 'В' },
+    { t: 'Главное — устранить источник инфекции и обеспечить отток гноя. При диабете проверить гликемию: риск осложнённого течения выше.' },
+    { t: 'Лучший выбор при любом зубном абсцессе — линкомицин: колита после него не бывает.', err: 'Б' },
+    { t: 'Если есть показания к системной антибиотикотерапии, — амоксициллин; перед назначением уточнить аллергию на пенициллины, функцию почек и принимаемые препараты.' },
+    { t: 'При диабете всегда сразу назначают амоксициллин с клавулановой кислотой: чем шире спектр, тем надёжнее.', err: 'Г' },
+  ],
+  14: [
+    { t: 'Две округлые афты на слизистой верхней губы с желтовато-белым налётом и красным ободком, пузырьков не было, — вероятный рецидивирующий афтозный стоматит.' },
+    { t: 'Быстрее всего поможет триамцинолон в адгезивной форме — сахарный диабет тут роли не играет.', err: 'Б' },
+    { t: 'Для уменьшения боли — бензидамин: местное противовоспалительное средство без системного действия глюкокортикостероидов.' },
+    { t: 'Полоскание хлоргексидином снимет воспаление и боль в афтах.', err: 'В' },
+    { t: 'Лидокаин можно наносить сколько угодно: он и обезболивает, и лечит воспаление.', err: 'Г' },
+    { t: 'Уточнить гликемию и сахароснижающую терапию. Если язвы часто повторяются или долго не заживают, — обследование.' },
+  ],
+  15: [
+    { t: 'Зуд и покалывание, затем группа целых пузырьков на покрасневшей кайме нижней губы — рецидивирующий герпес губ.' },
+    { t: 'Ганцикловир — тоже аналог нуклеозидов, поэтому подойдёт как стандартное лечение герпеса губ.', err: 'Б' },
+    { t: 'Противовирусный препарат — валацикловир: начинать рано, лучше на стадии зуда и покалывания.' },
+    { t: 'Рибавирин — противовирусное средство широкого спектра: справится и с герпесом.', err: 'В' },
+    { t: 'При ХБП 3-й стадии дозу валацикловира корректируют по функции почек; уточнить все принимаемые препараты и не допускать обезвоживания.' },
+    { t: 'Подойдёт и занамивир: он тоже противовирусный, а значит, действует и на вирус герпеса.', err: 'Г' },
+  ],
+  16: [
+    { t: 'Глубокая кариозная полость в 46 и резкая боль при накусывании — симптоматический апикальный периодонтит; нужна стоматологическая диагностика.' },
+    { t: 'Для временного обезболивания лучше ибупрофен: он сильнее парацетамола, а апиксабан на это не влияет.', err: 'А' },
+    { t: 'Из предложенных — парацетамол: на тромбоциты и желудок он влияет меньше НПВП; при болезни печени нужна осторожность.' },
+    { t: 'Если боль сильная, подойдёт кеторолак в таблетках.', err: 'В' },
+    { t: 'Чтобы снять воспаление вокруг корня, добавить семаглутид.', err: 'Г' },
+    { t: 'Апиксабан самостоятельно не отменять. Обезболивание причину не лечит — зуб лечит стоматолог.' },
+  ],
+  17: [
+    { t: 'Белый творожистый налёт на спинке языка снимается шпателем, под ним покраснение; недавно был курс антибиотиков — орофарингеальный кандидоз.' },
+    { t: 'Налёт появился после антибиотиков — значит, инфекция бактериальная, нужен ещё один курс амоксициллина.', err: 'Б' },
+    { t: 'Для местного лечения — клотримазол («Кандид») в форме раствора 1 %: наносить на поражённые участки полости рта.' },
+    { t: 'Местные средства не нужны: при любом налёте на языке сразу назначают флуконазол внутрь.', err: 'В' },
+    { t: 'Будесонид не отменять: проверить технику ингаляции и полоскать рот водой после каждой ингаляции.' },
+    { t: 'Тербинафин — противогрибковый препарат, значит, подойдёт и для налёта во рту.', err: 'Г' },
+  ],
+  t1: [
+    { t: 'Частое болезненное мочеиспускание и дискомфорт над лобком без лихорадки, боли в боку и рвоты — картина острого неосложнённого цистита.' },
+    { t: 'Жжение при мочеиспускании бывает и при грибковой инфекции, поэтому для надёжности добавить флуконазол внутрь.', err: 'Б' },
+    { t: 'Подойдёт нитрофурантоин: он концентрируется в моче. Перед назначением проверить функцию почек, беременность и противопоказания.' },
+    { t: 'Самый сильный вариант — ципрофлоксацин: он действует на возбудителей мочевых инфекций, поэтому назначить его первым.', err: 'Г' },
+    { t: 'Если появятся лихорадка или боль в боку, думать о пиелонефрите: при подозрении на него нитрофурантоин не подходит.' },
+    { t: 'Чтобы быстрее убрать дискомфорт, дополнительно применить клотримазол.', err: 'В' },
+  ],
+  t2: [
+    { t: 'Интенсивная пульсирующая боль с одной стороны, тошнота и чувствительность к свету, такие приступы уже были — картина приступа мигрени.' },
+    { t: 'Повторяющиеся приступы могут быть связаны с герпесвирусами, поэтому начать ацикловир.', err: 'В' },
+    { t: 'Для купирования приступа — суматриптан: он уменьшает передачу болевых сигналов тройничного нерва.' },
+    { t: 'Чтобы приступы не возвращались, добавить курс итраконазола.', err: 'Б' },
+    { t: 'Перед суматриптаном уточнить, нет ли ИБС, инсульта или ТИА, периферической сосудистой болезни и неконтролируемой гипертензии.' },
+    { t: 'Если суматриптана нет, боль снимет фамцикловир: он превращается в пенцикловир и купирует приступ.', err: 'Г' },
+  ],
+  t3: [
+    { t: 'Кашель, температура, слабость и боль в груди при дыхании укладываются во внебольничную пневмонию. Сначала оценить тяжесть и сатурацию.' },
+    { t: 'Препарат выбора у амбулаторного пациента без сопутствующих заболеваний — амоксициллин, если нет аллергии на бета-лактамные антибиотики.' },
+    { t: 'Амоксициллин можно без всяких условий заменить доксициклином: при такой пневмонии они равноценны.', err: 'Г' },
+    { t: 'Чтобы быстрее снять воспаление в лёгких, добавить фексофенадин.', err: 'Б' },
+    { t: 'При аллергии на бета-лактамы амоксициллин не назначать: альтернатива по рекомендациям — макролид.' },
+    { t: 'На ночь — левоцетиризин: он уменьшит отёк бронхов и ускорит выздоровление от пневмонии.', err: 'В' },
+  ],
+  t4: [
+    { t: 'Повторяющиеся эпизоды свистящего дыхания, кашля и стеснения в груди, чаще ночью и при контакте с аллергенами, — картина бронхиальной астмы.' },
+    { t: 'Сальбутамол быстро расслабляет бронхи, поэтому его одного хватит как постоянной базисной терапии.', err: 'Г' },
+    { t: 'Базисная противовоспалительная терапия — будесонид ингаляционно: он уменьшает воспаление и гиперреактивность бронхов.' },
+    { t: 'Мометазон назальный — тоже глюкокортикостероид, поэтому им можно заменить ингаляционный препарат.', err: 'Б' },
+    { t: 'Флутиказон назальный контролирует астму так же: действие на дыхательные пути у него общее.', err: 'В' },
+    { t: 'После ингаляции будесонида полоскать рот, чтобы снизить риск кандидоза.' },
+  ],
+  t5: [
+    { t: 'Давление повышено при повторных измерениях. Острой боли в груди, одышки и неврологических симптомов в карте нет.' },
+    { t: 'Амлодипин относится к блокаторам кальциевых каналов и подходит для длительного контроля давления.' },
+    { t: 'Формотерол расслабляет гладкие мышцы, значит, и сосуды: для снижения давления он тоже подойдёт.', err: 'Б' },
+    { t: 'Для длительного контроля удобнее сальметерол: он действует долго и снижает сосудистое сопротивление.', err: 'В' },
+    { t: 'Амлодипин не предназначен для самостоятельного экстренного снижения давления. Возможны отёки и головокружение.' },
+    { t: 'Добавить беклометазон: он подавит воспаление в сосудах и поможет удерживать давление.', err: 'Г' },
+  ],
+  t6: [
+    { t: 'Слабость, утомляемость, головокружение при нагрузке, сниженные гемоглобин и запасы железа — железодефицитная анемия.' },
+    { t: 'Для восполнения железа — сульфат железа внутрь.' },
+    { t: 'Головокружение уберёт лизиноприл: он улучшит кровообращение и поможет поднять гемоглобин.', err: 'В' },
+    { t: 'Слабость и утомляемость быстрее пройдут от теофиллина: он также восполнит запасы железа.', err: 'Б' },
+    { t: 'Если лизиноприл не подойдёт, тот же эффект на гемоглобин даст периндоприл.', err: 'Г' },
+    { t: 'Обильные менструации требуют поиска и коррекции причины кровопотери. Предупредить о тошноте, запоре и тёмном стуле.' },
+  ],
+  t7: [
+    { t: 'Крапивница, отёк языка, затруднённое дыхание и резкое падение давления через несколько минут после введения препарата — анафилаксия.' },
+    { t: 'Начать с хлоропирамина («Супрастина»): реакция аллергическая, он снимет и крапивницу, и отёк языка.', err: 'Г' },
+    { t: 'Адреналин вводят внутримышечно: абсолютных противопоказаний при анафилаксии нет, задержка опаснее.' },
+    { t: 'Чтобы стабилизировать сосуды, добавить лозартан.', err: 'Б' },
+    { t: 'Одновременно вызвать экстренную помощь и контролировать дыхание и кровообращение.' },
+    { t: 'Если лозартана нет, подойдёт валсартан: он снимет бронхоспазм и поднимет давление.', err: 'В' },
+  ],
+  t8: [
+    { t: 'Потливость, дрожь, сердцебиение и спутанность мыслей при низкой глюкозе у пациента на инсулине — гипогликемия.' },
+    { t: 'Сердцебиение и дрожь быстро снимет бисопролол, с него и начать.', err: 'В' },
+    { t: 'Если пациент в сознании и безопасно глотает, дать быстрые углеводы или глюкозу внутрь и повторно проверить глюкозу.' },
+    { t: 'Чтобы приступ не повторился, добавить телмисартан: он повышает уровень глюкозы.', err: 'Б' },
+    { t: 'При нарушении сознания, судорогах или невозможности глотать ничего не давать через рот: экстренная помощь, глюкагон или внутривенная глюкоза по протоколу.' },
+    { t: 'Метопролол подойдёт как замена глюкозе: он быстро выровняет состояние.', err: 'Г' },
+  ],
+  t9: [
+    { t: 'Слабость, онемение и покалывание при подтверждённом дефиците B12. При атрофическом гастрите всасывание B12 может нарушаться.' },
+    { t: 'Для лечения можно обойтись фолиевой кислотой: она улучшит показатели крови и уберёт онемение.', err: 'Г' },
+    { t: 'Препарат для восполнения — цианокобаламин. При неврологических симптомах и мальабсорбции часто требуется парентеральное введение.' },
+    { t: 'Онемение и покалывание уменьшит фуросемид: он снимет отёк вокруг нервов.', err: 'Б' },
+    { t: 'Для защиты нервов добавить спиронолактон: он поможет восстановить запас B12.', err: 'В' },
+    { t: 'Выяснить причину дефицита и не откладывать лечение при онемении или нарушении походки.' },
+  ],
+  t10: [
+    { t: 'Округлое красное пятно с шелушащимся краем и относительно светлым центром, которое постепенно растёт, — дерматофития гладкой кожи.' },
+    { t: 'Нифедипин расширит сосуды кожи и ускорит очищение очага.', err: 'Б' },
+    { t: 'При ограниченном очаге подойдёт тербинафин в форме крема.' },
+    { t: 'Зуд и шелушение уменьшит моксонидин.', err: 'В' },
+    { t: 'Если моксонидин не подойдёт, применить клонидин: он тоже подавляет рост грибка.', err: 'Г' },
+    { t: 'Избегать попадания крема в глаза и на слизистые. При поражении ногтей или волосистой части головы, обширных очагах или отсутствии эффекта нужен врач.' },
+  ],
+  t11: [
+    { t: 'Редкий стул, плотные каловые массы и натуживание без рвоты, выраженной боли и задержки газов — картина обычного запора.' },
+    { t: 'Лоперамид нормализует работу кишечника, поэтому при запоре он тоже подойдёт.', err: 'Г' },
+    { t: 'Осмотическое слабительное — макрогол: он удерживает воду в кишечнике и размягчает стул.' },
+    { t: 'Инсулин гларгин улучшит обмен веществ, и стул наладится.', err: 'Б' },
+    { t: 'При гипотиреозе проверить контроль ТТГ и лекарства: недостаточная заместительная терапия может вызывать запор.' },
+    { t: 'Для более быстрого эффекта подойдёт инсулин аспарт.', err: 'В' },
+  ],
+};
+// Вывод после проверки — свой у каждого случая: ошибки ИИ в них разного рода
+const VYVOD_II = {
+  1: 'ИИ подбирает препарат по болезни и забывает про постоянные лекарства пациента: противогрибковое средство может усилить действие варфарина, а глюкокортикостероид — грибковую инфекцию. Проверяй взаимодействия.',
+  2: 'ИИ уверенно предлагает препараты, которые не подходят этому пациенту. Проверяй назначение по болезням и лекарствам пациента сам.',
+  3: 'ИИ путает вирус с бактериями и воспалением, а таблетки назначает без оглядки на почки. Проверяй, действует ли средство на причину болезни и как оно выводится.',
+  4: 'ИИ путает облегчение боли с лечением болезни и белые линии — с грибком. Проверяй, на какой механизм болезни действует препарат и какое место он занимает в клинических рекомендациях.',
+  5: 'ИИ лечит симптом и забывает про причину язвы и про аспирин, который пациент уже принимает. Сначала убери причину, потом проверь препарат по лекарствам пациента.',
+  6: 'ИИ не различает, усиливает препарат слюноотделение или подавляет его, и не замечает бронхиальную астму. Проверяй механизм действия и сопутствующие болезни.',
+  7: 'ИИ спешит лечить пятно и откладывает главное — выяснить, что это. При стойком поражении языка сначала обследование.',
+  8: 'ИИ считает, что антибиотик из списка подходит сам по себе, и не видит его рисков. Основа лечения — обработка и гигиена, а антибиотик выбирают по показаниям.',
+  9: 'ИИ выбирает самое «сильное» обезболивающее, не глядя на почки и желудок пациента, а противомикробный гель считает обезболивающим. Проверяй действие препарата и болезни пациента.',
+  10: 'ИИ путает витамины и микроэлементы и не думает о том, почему возник дефицит. При нарушенном всасывании важен и путь введения препарата.',
+  11: 'ИИ находит причину и предлагает убрать её любой ценой, забывая про сердце пациента. Препарат от давления меняет только лечащий врач.',
+  12: 'ИИ берёт знакомое или самое сильное средство и забывает о свежей лунке. После удаления зуба проверяй, не повышает ли препарат кровоточивость, и начинай с неопиоидных анальгетиков.',
+  13: 'ИИ выбирает антибиотик «пошире» или «посильнее» и забывает, что гной нужно выпустить. Главное — убрать источник инфекции; антибиотик — по показаниям, без лишне широкого спектра.',
+  14: 'ИИ путает обезболивание, антисептику и противовоспалительное действие и забывает про диабет. Проверяй, какое именно действие у препарата и как он сочетается с болезнями пациента.',
+  15: 'ИИ считает, что любой противовирусный препарат действует на любой вирус. Проверяй, против какого вируса создан препарат, а при болезни почек — как подобрать дозу.',
+  16: 'ИИ забывает про антикоагулянт и предлагает НПВП, которые вместе с ним повышают риск кровотечения. Проверяй обезболивающее по постоянным лекарствам пациента.',
+  17: 'ИИ видит связь с антибиотиками, но делает неверный вывод, а любое противогрибковое средство считает подходящим. Проверяй, на какой возбудитель действует препарат и годится ли его форма для местного лечения.',
+  t1: 'ИИ перепутал бактериальную инфекцию с грибковой и выбрал антибиотик по принципу «чем сильнее, тем лучше». Проверяй, действует ли препарат на возбудителя и что советуют клинические рекомендации при этой форме болезни.',
+  t2: 'ИИ приписал противовирусным и противогрибковым средствам то, чего у них нет. Проверяй механизм: действует ли препарат на причину приступа, а не только знаком ли он по другому случаю.',
+  t3: 'ИИ принял противоаллергические средства за лечение инфекции и уравнял доксициклин с препаратом выбора. Активный антибиотик — ещё не препарат выбора.',
+  t4: 'ИИ решил, что одинаковая группа означает одинаковое действие, и бронхолитик для приступа выдал за базисную терапию. Смотри на форму препарата и на его роль в лечении.',
+  t5: 'ИИ принял возможное влияние на сосуды за показание к лечению и назначил препараты для дыхательных путей от гипертензии. Проверяй группу препарата и его показания, а не только похожее слово в механизме.',
+  t6: 'ИИ лечит жалобу, а не дефицит железа. Препарат должен восполнять то, чего не хватает пациенту, а причину кровопотери ищут отдельно.',
+  t7: 'ИИ тянется к привычному «супрастину», а антигипертензивные средства выдаёт за поддержку сосудов. При анафилаксии нельзя терять время: сначала адреналин внутримышечно.',
+  t8: 'ИИ лечит сердцебиение как отдельную жалобу и упускает причину — низкую глюкозу. β-блокаторы могут ещё и маскировать тахикардию при гипогликемии. Сначала смотри на глюкозу и сознание.',
+  t9: 'ИИ подменил витамин B12 фолиевой кислотой: показатели крови могут улучшиться, а нервная система остаётся без защиты. При дефиците B12 восполняй именно B12.',
+  t10: 'ИИ выдал препараты для давления за средства от кожной болезни. Если механизм препарата не связан с причиной болезни, красивое объяснение не спасает.',
+  t11: 'ИИ назначил препарат, который замедляет кишечник, и инсулин пациентке без диабета. Проверяй направление действия препарата и есть ли показание вообще.',
+};
+let II = [];
+const pochemu = (bukva) => SL.varianty.find((v) => v.bukva === bukva).obyasnenie;
+let otmecheny = new Set(), provereno = false;
+function nachatII() {
+  otmecheny = new Set();
+  provereno = false;
+  $('#ii-stroki').innerHTML = II.map((l, i) => `<button class="line" data-i="${i}" aria-pressed="false"><span class="n">${i + 1}</span><span>${esc(l.t)}</span></button>`).join('');
+  $('#ii-stroki').querySelectorAll('.line').forEach((b) => b.addEventListener('click', () => {
+    if (provereno) return;
+    const i = +b.dataset.i;
+    otmecheny.has(i) ? otmecheny.delete(i) : otmecheny.add(i);
+    b.classList.toggle('marked', otmecheny.has(i));
+    b.setAttribute('aria-pressed', otmecheny.has(i));
+  }));
+  $('#ii-itog').innerHTML = '';
+  $('#ii-proverit').disabled = false;
+}
+$('#ii-proverit').onclick = () => {
+  provereno = true;
+  $('#ii-proverit').disabled = true;
+  let naideno = 0, lishnie = 0;
+  document.querySelectorAll('#ii-stroki .line').forEach((b, i) => {
+    b.disabled = true;
+    b.classList.remove('marked');
+    if (II[i].err && otmecheny.has(i)) { b.classList.add('hit'); naideno++; }
+    else if (II[i].err) b.classList.add('miss');
+    else if (otmecheny.has(i)) { b.classList.add('false'); lishnie++; }
+  });
+  const vsego = II.filter((l) => l.err).length;
+  $('#ii-itog').innerHTML = `
+    <p class="q">Найдено ошибок: ${naideno} из ${vsego}${lishnie ? ` · лишних отметок: ${lishnie}` : ''}</p>
+    ${II.map((l, i) => (l.err ? `<div class="fb ${otmecheny.has(i) ? 'good' : 'badc'}"><strong>Строка ${i + 1} — ${otmecheny.has(i) ? 'найдено' : 'пропущено'}</strong><p class="cap">${esc(pochemu(l.err))}</p></div>`
+      : otmecheny.has(i) ? `<div class="fb"><strong>Строка ${i + 1} — ошибки нет</strong></div>` : '')).join('')}
+    <section class="podhod"><h2 class="h">Как правильно</h2>${abzacy(SL.podhod.split(/\n\s*\n/)[0])}</section>
+    <p class="src">Вывод для студента: ${esc(VYVOD_II[SL.kl] || 'ИИ отвечает уверенно и тогда, когда ошибается. Проверяй каждое назначение сам.')}</p>`;
+};
+$('#ii-zanovo').onclick = nachatII;
+// Ошибки ИИ — это неверные варианты теста, а разбор называет верный препарат: до ответа на тест задание закрыто
+function zamokII() {
+  const otkryto = !!otvety[SL.kl];
+  $('#ii-zamok').hidden = otkryto;
+  $('#ii-telo').hidden = !otkryto;
+}
+$('#k-testu').onclick = () => vkladka('test');
+
+// ---------- Вкладки ----------
+const VKLADKI = [...document.querySelectorAll('nav [role=tab]')];
+function pokazatNachalo(el) {
+  const top = el.getBoundingClientRect().top;
+  if (top < 0 || top > innerHeight * 0.7) el.scrollIntoView({ behavior: plavno(), block: 'start' });
+}
+function vkladka(imya) {
+  for (const b of VKLADKI) {
+    const da = b.dataset.tab === imya;
+    b.setAttribute('aria-selected', da);
+    b.tabIndex = da ? 0 : -1;
+    $('#p-' + b.dataset.tab).hidden = !da;
+  }
+  pokazatNachalo($('#p-' + imya));
+}
+VKLADKI.forEach((b, i) => {
+  b.addEventListener('click', () => vkladka(b.dataset.tab));
+  b.addEventListener('keydown', (e) => {
+    const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+    const vidny = VKLADKI.filter((x) => !x.hidden);
+    if (!d || vidny.length < 2) return;
+    const s = vidny[(vidny.indexOf(b) + d + vidny.length) % vidny.length];
+    s.focus();
+    vkladka(s.dataset.tab);
+  });
+});
+
+otkryt(decodeURIComponent(location.hash.slice(1)) || VSE[0].kl);
+if (location.protocol === 'file:') {
+  $('#model').dataset.tekst = '3D не открывается с диска. Запусти в папке site: python -m http.server — и открой http://localhost:8000';
+} else if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js'); // кэш для работы без сети
+}
+</script>
+
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+<script type="module">
+// 3D грузится при первом случае стоматологии: у терапии схема тела, модель и three.js ей не нужны
+const el = document.getElementById('model');
+const podpis = document.getElementById('podpis');
+const PODSKAZKA = podpis.textContent;
+const stomat = (kl) => /^\d+$/.test(kl);
+
+let zapushcheno = false;
+const zhdat = (e) => { if (stomat(e.detail)) { document.removeEventListener('sluchay', zhdat); zapustit(); } };
+if (stomat(window.tekNomer)) zapustit();
+else document.addEventListener('sluchay', zhdat);
+
+async function zapustit() {
+  if (zapushcheno || location.protocol === 'file:') return;
+  zapushcheno = true;
+  try {
+    const { Prosmotr, SLUCHAI, nazvanie } = await import('./3d/prosmotr.js');
+    const p = await Prosmotr.sozdat(el, 'models/polost_rta.glb');
+    delete el.dataset.tekst;
+    p.rezhim('prozrachno');
+    const podsv = document.getElementById('podsvetka');
+    const pokazat = (kl) => {
+      if (!stomat(kl)) return;
+      p.pokazat(SLUCHAI[kl] || {});
+      podsv.hidden = !p.zona.length; // в случае без подсвеченных частей кнопке нечего выключать
+      podpis.textContent = PODSKAZKA;
+    };
+    pokazat(window.tekNomer);
+    document.addEventListener('sluchay', (e) => pokazat(e.detail));
+
+    p.onVybor = (imya) => { podpis.textContent = imya ? nazvanie(imya) : PODSKAZKA; };
+    for (const b of document.querySelectorAll('[data-rezhim]')) {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('[data-rezhim]').forEach((x) => x.setAttribute('aria-pressed', x === b));
+        p.rezhim(b.dataset.rezhim);
+        podpis.textContent = b.dataset.rezhim === 'obychno'
+          ? 'Снаружи видно только кольца: поражения во рту закрыты губой и щекой. Чтобы их разглядеть, включи «Прозрачно».'
+          : PODSKAZKA;
+      });
+    }
+    document.getElementById('k-zone').addEventListener('click', () => {
+      const k = p.kSleduyushchemu();
+      if (k) podpis.textContent = `Поражение ${k.nomer} из ${k.vsego}. Нажми «К поражению» ещё раз — покажу следующее.`;
+    });
+    document.getElementById('obzor').addEventListener('click', () => { p.obzor(); podpis.textContent = PODSKAZKA; });
+    podsv.addEventListener('click', () => {
+      const vkl = podsv.getAttribute('aria-pressed') !== 'true';
+      podsv.setAttribute('aria-pressed', vkl);
+      p.podsvetka(vkl);
+    });
+    document.querySelectorAll('.panel button').forEach((b) => { b.disabled = false; });
+    window.prosmotr = p; // для проверки из консоли
+  } catch (e) {
+    console.error(e);
+    el.dataset.tekst = 'Не удалось загрузить 3D-модель.';
+  }
+}
+</script>
+</body>
+</html>
